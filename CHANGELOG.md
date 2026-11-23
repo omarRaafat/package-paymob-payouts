@@ -2,6 +2,15 @@
 
 All notable changes to this package are listed here. Versions follow [Semantic Versioning](https://semver.org).
 
+## [1.0.1] - 2026-11-23
+
+### Fixed (verified on Paymob staging)
+- The client reference id is now also sent as `reference`: Paymob's inquiry by reference searches that field, so timed-out payouts are found.
+- Read our reference back from Paymob's `client_transaction_reference` field.
+
+### Added
+- `DisbursementResult::fees()` and `::vat()`.
+
 ## [1.0.0] - 2026-11-23
 
 ### Added

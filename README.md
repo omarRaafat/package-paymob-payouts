@@ -231,13 +231,16 @@ PaymobPayouts::disburse(DisbursementRequest::etisalat('01101234567', 50)); // no
 - Schedule `paymob-payouts:reconcile`, and alert on payouts stuck in `unknown`.
 - Test on **staging** first; switch `PAYMOB_PAYOUTS_ENV=production` only when ready.
 
-## Not yet confirmed by Paymob's public docs
+## Verified against Paymob staging
 
-These follow Paymob's Postman collection but are not fully documented publicly; confirm them with Paymob for your account:
+Tested end to end on `stagingpayouts.paymobsolutions.com` (Vodafone wallet payouts):
 
-- Inquiry **by reference** path (`/api/secure/transaction/inquire/by-reference/`).
-- Exact shape of inquiry and budget answers (the client accepts the common shapes).
-- The full list of status codes and `disbursement_status` values (`successful`, `pending`, `failed` are handled; anything unrecognised is treated as **unknown**, never as success).
+- Token: `expires_in` 3600, `token_type` Bearer, with a `refresh_token`.
+- Disburse answer: `transaction_id`, `disbursement_status` (`successful`), `status_code` (`"200"`), `status_description`, `fees`, `vat`, and our id echoed as `client_transaction_reference` (available as `$result->fees()` / `$result->vat()`).
+- Inquiry by id and **by reference** both answer `{"count", "next", "previous", "results": [...]}`; an unknown id gives an empty `results` list. The by-reference inquiry searches the `reference` field, which this package fills with the client reference id — so a payout that timed out is found and settled.
+- Budget: `{"current_budget": "Your current budget is 1811.49 LE", "current_balance": 1811.49, "currency": "EGP"}`.
+
+Still to confirm with Paymob for your account: the full list of failure `status_code` values, and other issuers (bank card, instant bank, Egypt Post) on staging. Unrecognised statuses are treated as **unknown**, never as success.
 
 ## Testing
 
