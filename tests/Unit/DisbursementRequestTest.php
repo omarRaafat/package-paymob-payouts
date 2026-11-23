@@ -52,6 +52,7 @@ class DisbursementRequestTest extends TestCase
             'bank_transaction_type' => 'salary',
             'comment' => 'March salary',
             'client_reference_id' => 'r',
+            'reference' => 'r',
             'customer_bears_fees' => true,
         ], $request->toArray());
     }

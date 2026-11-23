@@ -175,6 +175,9 @@ final class DisbursementRequest
             $this->fields,
             [
                 'client_reference_id' => $this->clientReferenceId,
+                // Paymob's inquiry "by reference" searches this field (verified on staging), so the
+                // same id is sent here too: a payout that timed out can still be found.
+                'reference' => $this->clientReferenceId,
                 'customer_bears_fees' => $this->customerBearsFees,
             ]
         );

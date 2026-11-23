@@ -56,8 +56,54 @@ class PaymobPayoutsTest extends TestCase
             'amount' => '250.00',
             'msisdn' => '01001234567',
             'client_reference_id' => 'ref-1',
+            'reference' => 'ref-1',
             'customer_bears_fees' => false,
         ], $fake->jsonBody(1));
+    }
+
+    /** The exact answer Paymob staging gave for a 10 EGP Vodafone payout (2026-11-23). */
+    private function stagingSuccess(): array
+    {
+        return [
+            'transaction_id' => '77d80d4e-6fae-4a5c-a46f-39b972cd22be', 'issuer' => 'vodafone', 'msisdn' => '01023456789',
+            'amount' => 10.0, 'full_name' => '', 'disbursement_status' => 'successful', 'status_code' => '200',
+            'fees' => 0.225, 'vat' => 0.0315, 'reference_id' => '', 'status_description' => 'amount 10.00 is disbursed successfully',
+            'aman_cashing_details' => null, 'client_transaction_reference' => '400f5a82-4b68-4d21-ac02-d93a119f7a05',
+            'created_at' => '2026-11-23 12:36:39.408492', 'updated_at' => '2026-11-23 12:36:39.436588',
+            'accept_balance_transfer_id' => null, 'reference' => '400f5a82-4b68-4d21-ac02-d93a119f7a05', 'comment' => '', 'bank_name' => null,
+        ];
+    }
+
+    public function test_the_real_staging_answer_is_read_correctly(): void
+    {
+        $fake = (new FakePaymob())->queueToken()->queue(FakePaymob::json(200, $this->stagingSuccess()));
+
+        $result = $fake->client->disburse(DisbursementRequest::vodafone('01023456789', 10)->withClientReferenceId('400f5a82-4b68-4d21-ac02-d93a119f7a05'));
+
+        $this->assertTrue($result->isSuccessful());
+        $this->assertSame('77d80d4e-6fae-4a5c-a46f-39b972cd22be', $result->transactionId());
+        $this->assertSame('400f5a82-4b68-4d21-ac02-d93a119f7a05', $result->clientReferenceId());
+        $this->assertSame(0.225, $result->fees());
+        $this->assertSame(0.0315, $result->vat());
+    }
+
+    public function test_a_timed_out_payout_is_found_by_reference_with_the_real_inquiry_shape(): void
+    {
+        $fake = (new FakePaymob())->queueToken()->queue(FakePaymob::json(200, [
+            'count' => 1, 'next' => null, 'previous' => null, 'results' => [$this->stagingSuccess()],
+        ]));
+
+        $result = $fake->client->transactionStatus(null, '400f5a82-4b68-4d21-ac02-d93a119f7a05');
+
+        $this->assertTrue($result->isSuccessful());
+        $this->assertSame('77d80d4e-6fae-4a5c-a46f-39b972cd22be', $result->transactionId());
+    }
+
+    public function test_an_empty_inquiry_means_not_found(): void
+    {
+        $fake = (new FakePaymob())->queueToken()->queue(FakePaymob::json(200, ['count' => 0, 'next' => null, 'previous' => null, 'results' => []]));
+
+        $this->assertNull($fake->client->transactionStatus(null, 'never-sent'));
     }
 
     public function test_the_token_is_reused_until_it_expires(): void

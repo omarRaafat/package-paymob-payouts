@@ -108,10 +108,9 @@ class PaymobPayouts
     }
 
     /**
-     * Raw inquiry by your client_reference_id values (exact match, up to 140 characters each).
-     * Use it when a payout timed out and you have no Paymob transaction id.
-     *
-     * Note: Paymob's collection marks this path as inferred; confirm it with Paymob for your account.
+     * Raw inquiry by reference (exact match, up to 140 characters each): Paymob searches the
+     * `reference` field, which disburse() fills with the client reference id. Use it when a
+     * payout timed out and you have no Paymob transaction id. Verified on Paymob staging.
      *
      * @param string[] $references
      * @throws ApiException|AuthenticationException
@@ -142,9 +141,10 @@ class PaymobPayouts
         }
 
         if ($clientReferenceId) {
-            $found = $this->pick(self::transactionsIn($this->inquireByReference([$clientReferenceId], $bankTransactions)), 'client_reference_id', $clientReferenceId);
-            if ($found) {
-                return DisbursementResult::fromResponse($found, 200, $clientReferenceId);
+            foreach (self::transactionsIn($this->inquireByReference([$clientReferenceId], $bankTransactions)) as $transaction) {
+                if (DisbursementResult::referenceIn($transaction) === $clientReferenceId) {
+                    return DisbursementResult::fromResponse($transaction, 200, $clientReferenceId);
+                }
             }
         }
 

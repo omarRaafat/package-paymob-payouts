@@ -57,7 +57,8 @@ final class DisbursementResult
         return new self(
             Status::fromPaymob($paymobStatus, $httpStatus),
             self::str($data['transaction_id'] ?? $data['id'] ?? null),
-            self::str($data['client_reference_id'] ?? null) ?? $clientReferenceId,
+            // Paymob echoes our client_reference_id as "client_transaction_reference".
+            self::referenceIn($data) ?? $clientReferenceId,
             $paymobStatus,
             self::str($data['status_code'] ?? $body['status_code'] ?? null),
             $description,
@@ -140,6 +141,41 @@ final class DisbursementResult
         return $this->raw;
     }
 
+    /** Transfer fee Paymob charged (EGP), when reported. */
+    public function fees(): ?float
+    {
+        $value = $this->transaction()['fees'] ?? null;
+
+        return is_numeric($value) ? (float) $value : null;
+    }
+
+    /** VAT on the fee (EGP), when reported. */
+    public function vat(): ?float
+    {
+        $value = $this->transaction()['vat'] ?? null;
+
+        return is_numeric($value) ? (float) $value : null;
+    }
+
+    /** Our reference as Paymob stores it, from a transaction array. */
+    public static function referenceIn(array $transaction): ?string
+    {
+        foreach (['client_transaction_reference', 'client_reference_id', 'reference'] as $key) {
+            if (!empty($transaction[$key]) && is_scalar($transaction[$key])) {
+                return (string) $transaction[$key];
+            }
+        }
+
+        return null;
+    }
+
+    private function transaction(): array
+    {
+        $data = isset($this->raw['transaction_id']) ? $this->raw : ($this->raw['data'] ?? $this->raw);
+
+        return is_array($data) ? $data : [];
+    }
+
     public function toArray(): array
     {
         return [
@@ -149,6 +185,8 @@ final class DisbursementResult
             'paymob_status' => $this->paymobStatus,
             'status_code' => $this->statusCode,
             'status_description' => $this->statusDescription,
+            'fees' => $this->fees(),
+            'vat' => $this->vat(),
             'http_status' => $this->httpStatus,
         ];
     }
