@@ -1,0 +1,53 @@
+{
+    "name": "omarraafat/paymob-payouts",
+    "description": "Send money to Egyptian mobile wallets (Vodafone Cash, Etisalat Cash, Orange Cash, bank wallets), bank cards and accounts through the Paymob Payouts API. Framework-agnostic PHP client with an optional Laravel integration (idempotent payouts, transaction log, reconciliation).",
+    "type": "library",
+    "license": "MIT",
+    "keywords": ["paymob", "payouts", "disbursement", "vodafone cash", "wallet", "egypt", "laravel"],
+    "authors": [
+        {
+            "name": "Omar Raafat",
+            "homepage": "https://github.com/omarRaafat"
+        }
+    ],
+    "require": {
+        "php": "^7.4 || ^8.0",
+        "ext-json": "*",
+        "guzzlehttp/guzzle": "^6.5 || ^7.0"
+    },
+    "require-dev": {
+        "orchestra/testbench": "^6.0 || ^7.0 || ^8.0 || ^9.0",
+        "phpunit/phpunit": "^9.5 || ^10.0"
+    },
+    "suggest": {
+        "illuminate/support": "For the Laravel integration (service provider, migrations, PayoutManager, commands)."
+    },
+    "autoload": {
+        "psr-4": {
+            "OmarRaafat\\PaymobPayouts\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "OmarRaafat\\PaymobPayouts\\Tests\\": "tests/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "OmarRaafat\\PaymobPayouts\\Laravel\\PaymobPayoutsServiceProvider"
+            ],
+            "aliases": {
+                "PaymobPayouts": "OmarRaafat\\PaymobPayouts\\Laravel\\Facades\\PaymobPayouts"
+            }
+        }
+    },
+    "scripts": {
+        "test": "phpunit"
+    },
+    "config": {
+        "sort-packages": true
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true
+}
