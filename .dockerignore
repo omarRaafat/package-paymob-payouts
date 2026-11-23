@@ -1,0 +1,7 @@
+.git
+.github
+vendor
+tests
+examples
+composer.lock
+.phpunit.result.cache
