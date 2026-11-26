@@ -52,7 +52,7 @@ final class DisbursementResult
         $data = is_array($data) ? $data : [];
 
         $paymobStatus = self::str($data['disbursement_status'] ?? $data['status'] ?? null);
-        $description = self::str($data['status_description'] ?? $body['status_description'] ?? $body['message'] ?? $body['detail'] ?? $body['error_description'] ?? null);
+        $description = self::describe($data['status_description'] ?? $body['status_description'] ?? $body['message'] ?? $body['detail'] ?? $body['error_description'] ?? null);
 
         return new self(
             Status::fromPaymob($paymobStatus, $httpStatus),
@@ -189,6 +189,30 @@ final class DisbursementResult
             'vat' => $this->vat(),
             'http_status' => $this->httpStatus,
         ];
+    }
+
+    /**
+     * Paymob's description is usually text, but a refused request carries per-field errors
+     * ({"amount": ["Ensure this value is greater than or equal to 5."]}): flatten those to
+     * "amount: Ensure this value is greater than or equal to 5." so the reason is not lost.
+     */
+    private static function describe($value): ?string
+    {
+        if (!is_array($value)) {
+            return self::str($value);
+        }
+
+        $parts = [];
+        foreach ($value as $field => $messages) {
+            $text = implode(' ', array_filter(array_map(function ($m) {
+                return is_scalar($m) ? trim((string) $m) : json_encode($m);
+            }, (array) $messages)));
+            if ($text !== '') {
+                $parts[] = is_string($field) ? $field . ': ' . $text : $text;
+            }
+        }
+
+        return $parts ? implode(' ', $parts) : null;
     }
 
     private static function str($value): ?string

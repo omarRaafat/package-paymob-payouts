@@ -214,6 +214,21 @@ class PaymobPayoutsTest extends TestCase
         $this->assertTrue($fake->client->disburse(DisbursementRequest::vodafone('01001234567', 10))->isFailed());
     }
 
+    public function test_per_field_errors_from_paymob_become_the_description(): void
+    {
+        // Real Paymob staging answer for a 1 EGP Vodafone payout.
+        $fake = (new FakePaymob())->queueToken()->queue(FakePaymob::json(400, [
+            'disbursement_status' => 'failed',
+            'status_description' => ['amount' => ['Ensure this value is greater than or equal to 5.']],
+            'status_code' => '400',
+        ]));
+
+        $result = $fake->client->disburse(DisbursementRequest::vodafone('01001234567', 1));
+
+        $this->assertTrue($result->isFailed());
+        $this->assertSame('amount: Ensure this value is greater than or equal to 5.', $result->statusDescription());
+    }
+
     public function test_invalid_requests_are_stopped_before_any_call(): void
     {
         $fake = new FakePaymob();
