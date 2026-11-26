@@ -31,7 +31,13 @@ Sending money is easy. Not sending it **twice** is the hard part.
 composer require omarraafat/paymob-payouts
 ```
 
-You need **Paymob Payouts** credentials (client id, client secret, username, password). These are different from Paymob Accept (online payments) keys — ask your Paymob account manager.
+| Requirement | Supported |
+|---|---|
+| PHP | 7.4 – 8.3 |
+| Laravel (optional) | 8 – 12 (auto-discovered) |
+| Paymob | A **Payouts** account (staging and / or production) |
+
+You need **Paymob Payouts** credentials (client id, client secret, username, password). These are different from Paymob Accept (online payments) keys — ask your Paymob account manager. Using Laravel? Skip to [Laravel in 5 steps](#laravel).
 
 ---
 
@@ -98,6 +104,8 @@ $request = DisbursementRequest::vodafone('01001234567', 100)
 
 Phone numbers are normalised for you: `+20 100 123 4567`, `00201001234567`, `1001234567` and Arabic digits all become `01001234567`. Requests are validated before anything is sent (`ValidationException` with per-field errors). Bank codes come from Paymob (the `bank_card` and `instant_bank` lists differ).
 
+**Minimum amounts:** Paymob refuses payouts under **5 EGP** (answer: `amount: Ensure this value is greater than or equal to 5.`), and instant bank transfers under **112 EGP**. Nothing is sent in either case.
+
 ### Results
 
 | Method | Meaning |
@@ -131,15 +139,18 @@ All exceptions extend `OmarRaafat\PaymobPayouts\Exceptions\PaymobPayoutsExceptio
 
 ## Laravel
 
-Auto-discovered. Publish the config and migration, then migrate:
+The service provider and facade are auto-discovered. Five steps:
+
+**1. Install, publish the config and the migration, migrate**
 
 ```bash
+composer require omarraafat/paymob-payouts
 php artisan vendor:publish --tag=paymob-payouts-config
 php artisan vendor:publish --tag=paymob-payouts-migrations
-php artisan migrate
+php artisan migrate        # creates the paymob_payouts table
 ```
 
-`.env`:
+**2. Add your credentials to `.env`**
 
 ```dotenv
 PAYMOB_PAYOUTS_CLIENT_ID=
@@ -149,16 +160,19 @@ PAYMOB_PAYOUTS_PASSWORD=
 PAYMOB_PAYOUTS_ENV=staging
 ```
 
-Check the credentials work:
+**3. Check the credentials work**
 
 ```bash
 php artisan paymob-payouts:balance
+# Paymob Payouts balance: 1,734.56 EGP
 ```
 
-### Sending with `PayoutManager` (recommended)
+**4. Send a payout with `PayoutManager`**
 
 ```php
 use OmarRaafat\PaymobPayouts\DisbursementRequest;
+use OmarRaafat\PaymobPayouts\Exceptions\PaymobPayoutsException;
+use OmarRaafat\PaymobPayouts\Exceptions\ValidationException;
 use OmarRaafat\PaymobPayouts\Laravel\Exceptions\DuplicatePayoutException;
 use OmarRaafat\PaymobPayouts\Laravel\PayoutManager;
 
@@ -167,21 +181,55 @@ try {
         "invoice-{$invoice->id}",                         // your reference: paid at most once
         DisbursementRequest::vodafone($wallet->msisdn, $invoice->total),
         [
-            'payable'    => $merchant,                    // any Eloquent model
-            'created_by' => auth()->id(),
-            'meta'       => ['invoice_id' => $invoice->id],
+            'payable'    => $merchant,                    // any Eloquent model (optional)
+            'created_by' => auth()->id(),                 // optional
+            'meta'       => ['invoice_id' => $invoice->id], // optional
         ]
     );
+} catch (ValidationException $e) {
+    // Bad input (e.g. wrong number): nothing sent. $e->errors() per field.
 } catch (DuplicatePayoutException $e) {
-    // Already paid / in progress: $e->existing()
+    // Already paid or in progress: nothing sent again. $e->existing() is that payout.
+} catch (PaymobPayoutsException $e) {
+    // Paymob refused the credentials, or similar: nothing sent.
 }
 
-$payout->status;          // successful | failed | pending | unknown
-$payout->transaction_id;
+if ($payout->isSuccessful()) {
+    // Money sent: $payout->transaction_id
+} elseif ($payout->isFailed()) {
+    // Refused, nothing sent: $payout->status_description says why. Fix it and send the same reference again.
+} else {
+    // pending / unknown: do NOT send again. Step 5 settles it; you get an event.
+}
 ```
 
 - One **reference** = at most one successful / in-flight payout. After a **failed** one you can send it again.
-- Every attempt is a row in `paymob_payouts` (amount, destination, status, Paymob's answer, who sent it, what it was for).
+- Every attempt is a row in `paymob_payouts`. Query it with the `OmarRaafat\PaymobPayouts\Laravel\Models\Payout` model:
+
+| On `Payout` | |
+|---|---|
+| `status` | `successful`, `failed`, `pending`, `unknown` (or `sending` while the call is running) |
+| `isSuccessful()`, `isFailed()`, `isInFlight()` | `isInFlight()` = pending, unknown or sending: wait, don't resend |
+| `reference`, `client_reference_id`, `transaction_id` | Your reference, the id sent to Paymob, Paymob's id |
+| `amount`, `issuer`, `destination`, `maskedDestination()` | What was sent where |
+| `status_code`, `status_description`, `response` | Paymob's answer |
+| `payable`, `created_by`, `meta` | What it was for and who sent it |
+
+**5. Schedule the reconcile command** (settles pending and timed-out payouts)
+
+```php
+// routes/console.php (Laravel 11 and 12)
+use Illuminate\Support\Facades\Schedule;
+
+Schedule::command('paymob-payouts:reconcile')->everyFiveMinutes()->withoutOverlapping();
+```
+
+```php
+// app/Console/Kernel.php, schedule() method (Laravel 8 – 10)
+$schedule->command('paymob-payouts:reconcile')->everyFiveMinutes()->withoutOverlapping();
+```
+
+Make sure the scheduler runs (`php artisan schedule:work`, or the usual `schedule:run` cron entry).
 
 ### Events
 
@@ -199,12 +247,7 @@ Event::listen(PayoutSucceeded::class, function ($event) {
 
 ### Settling timed-out payouts
 
-```php
-// app/Console/Kernel.php
-$schedule->command('paymob-payouts:reconcile')->everyFiveMinutes()->withoutOverlapping();
-```
-
-It asks Paymob about payouts that are pending, unknown or were interrupted, and records the final result (firing the events). A payout Paymob cannot find is **never** marked failed automatically — check it in the Paymob dashboard, then:
+The `paymob-payouts:reconcile` command (step 5) asks Paymob about payouts that are pending, unknown or were interrupted, and records the final result (firing the events). A payout Paymob cannot find is **never** marked failed automatically — check it in the Paymob dashboard, then:
 
 ```php
 app(PayoutManager::class)->markFailed($payout, 'Checked in Paymob dashboard: not sent.');
@@ -219,6 +262,43 @@ use OmarRaafat\PaymobPayouts\Laravel\Facades\PaymobPayouts;
 PaymobPayouts::balance();
 PaymobPayouts::disburse(DisbursementRequest::etisalat('01101234567', 50)); // no record / duplicate check
 ```
+
+---
+
+## Testing on Paymob staging
+
+Staging moves test money only, but it behaves like production. Before your first test payout:
+
+1. **Use Paymob's staging test numbers.** Only these get a successful answer on staging (and they work on staging only). Other numbers are refused with `Request type is not supported`: the payout gets a `transaction_id` but fails, and nothing is sent.
+
+   | Issuer | Test destination | Example |
+   |---|---|---|
+   | `vodafone` | `01023456789` | `DisbursementRequest::vodafone('01023456789', 10)` |
+   | `etisalat` | `01123456789` | `DisbursementRequest::etisalat('01123456789', 10)` |
+   | `orange` | `01223456789` | `DisbursementRequest::orange('01223456789', 10, 'Test User')` |
+   | `bank_wallet` | `01123416789` | `DisbursementRequest::bankWallet('01123416789', 10, 'Test User')` |
+   | `bank_card` | card `1111222233334444` or IBAN `EG829299835722904511873050307` | `DisbursementRequest::bankCard('1111222233334444', 'CIB', 'Test User', 10)` |
+   | `instant_bank` | account `1234567890123456` or IBAN `EG187277769381221446527989011` | `DisbursementRequest::instantBank('1234567890123456', 'CIB', 'Test User', 112)` |
+
+   For `bank_card` and `instant_bank`, use a bank code from Paymob's bank list (`CIB` above is an example).
+
+   ```bash
+   # In a Laravel app, quick check from the terminal:
+   php artisan tinker --execute="dump(app(\OmarRaafat\PaymobPayouts\Laravel\PayoutManager::class)->send('staging-test-1', \OmarRaafat\PaymobPayouts\DisbursementRequest::vodafone('01023456789', 10))->status);"
+   ```
+
+2. **Send at least 5 EGP** (112 EGP for instant bank transfers).
+3. Check the balance first (`php artisan paymob-payouts:balance`): if it works, your credentials and `PAYMOB_PAYOUTS_ENV` are right.
+4. When a payout fails, read `status_description` (or `$payout->response` for Paymob's full answer). It says why.
+
+| You see | Meaning | What to do |
+|---|---|---|
+| `AuthenticationException` / balance command fails | Wrong credentials, or staging credentials with `PAYMOB_PAYOUTS_ENV=production` (or the reverse) | Check the four values and the environment |
+| `failed`: `amount: Ensure this value is greater than or equal to 5.` | Below Paymob's minimum | Send 5 EGP or more |
+| `failed`: `Request type is not supported` | The number isn't a wallet Paymob can pay (on staging: not one of the test numbers above) | On staging, use the test number for that issuer; in production, check the number and issuer |
+| `unknown` | Timeout or server error: the money may have left | Don't resend; wait for `paymob-payouts:reconcile` |
+
+Going live: switch to your production credentials and `PAYMOB_PAYOUTS_ENV=production`, then send one small real payout first.
 
 ---
 

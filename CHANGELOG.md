@@ -2,6 +2,17 @@
 
 All notable changes to this package are listed here. Versions follow [Semantic Versioning](https://semver.org).
 
+## [Unreleased]
+
+### Fixed (verified on Paymob staging)
+- Paymob's per-field refusals (`{"amount": ["Ensure this value is greater than or equal to 5."]}`) are now kept as the status description (`amount: Ensure this value is greater than or equal to 5.`) instead of an empty one.
+
+### Documentation
+- Laravel in 5 steps, with all exceptions handled and the `Payout` model fields.
+- Scheduler setup for Laravel 11 / 12 (`routes/console.php`) and 8 – 10 (`Kernel.php`).
+- Supported PHP and Laravel versions, Paymob's 5 EGP minimum.
+- "Testing on Paymob staging": the official test numbers per issuer and common failure answers.
+
 ## [1.0.1] - 2026-11-23
 
 ### Fixed (verified on Paymob staging)
