@@ -3,6 +3,7 @@
     "description": "Send money to Egyptian mobile wallets (Vodafone Cash, Etisalat Cash, Orange Cash, bank wallets), bank cards and accounts through the Paymob Payouts API. Framework-agnostic PHP client with an optional Laravel integration (idempotent payouts, transaction log, reconciliation).",
     "type": "library",
     "license": "MIT",
+    "homepage": "https://github.com/omarRaafat/package-paymob-payouts",
     "keywords": ["paymob", "payouts", "disbursement", "vodafone cash", "wallet", "egypt", "laravel"],
     "authors": [
         {
