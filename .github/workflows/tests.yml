@@ -37,6 +37,8 @@ jobs:
 
       - name: Install dependencies
         run: |
+          # CI tests old Laravel versions on purpose; let them install despite advisories.
+          composer config policy.advisories.block false
           composer require "orchestra/testbench:${{ matrix.testbench }}" --dev --no-update --no-interaction
           composer update --prefer-dist --no-interaction --no-progress
 
