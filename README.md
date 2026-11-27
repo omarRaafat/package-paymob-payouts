@@ -5,7 +5,7 @@ Send money from your **Paymob Payouts** balance to Egyptian **mobile wallets** (
 - **Plain PHP client** (PHP 7.4 – 8.3, any framework): log in, send a payout, check its status, read your balance.
 - **Laravel add-on** (optional): a `paymob_payouts` table, **duplicate-payout protection**, events, and a command that settles timed-out payouts.
 
-> Endpoints follow Paymob's official [Payouts Postman collection](https://github.com/PaymobAccept/API-Postman-Collections) and [Payouts docs](https://developers.paymob.com/paymob-docs/developers/payouts-apis/cashin-api/vodafone-cashin). Test on Paymob **staging** before going live.
+> Built on Paymob's **official Payouts API**, following Paymob's own documentation and request formats, with duplicate-payout protection built in. Test on Paymob **staging** before going live.
 
 ---
 
